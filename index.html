@@ -206,6 +206,7 @@ function extractMedia(html,pageUrl){
 
 var FETCHERS=[
   { build:function(u){ return u; }, json:false },
+  { build:function(u){ return 'https://r.jina.ai/'+u; }, json:false, headers:{'X-Return-Format':'html'} },
   { build:function(u){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u); }, json:false },
   { build:function(u){ return 'https://r.jina.ai/'+u; }, json:false },
   { build:function(u){ return 'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u); }, json:false },
@@ -213,26 +214,27 @@ var FETCHERS=[
   { build:function(u){ return 'https://api.allorigins.win/get?url='+encodeURIComponent(u); }, json:true }
 ];
 function fetchItems(pageUrl){
-  var anyOk=false;
-  var chain=Promise.resolve([]);
+  var anyOk=false, best=[];
+  var chain=Promise.resolve();
   FETCHERS.forEach(function(f){
-    chain=chain.then(function(prev){
-      if(prev.length) return prev;
+    chain=chain.then(function(){
+      if(best.length>=15) return;
       var ctrl=('AbortController' in window)?new AbortController():null;
-      var to=ctrl?setTimeout(function(){ ctrl.abort(); },20000):null;
-      return fetch(f.build(pageUrl), ctrl?{signal:ctrl.signal}:{ }).then(function(r){
+      var to=ctrl?setTimeout(function(){ ctrl.abort(); },15000):null;
+      var opts={}; if(ctrl) opts.signal=ctrl.signal; if(f.headers) opts.headers=f.headers;
+      return fetch(f.build(pageUrl), opts).then(function(r){
         if(to) clearTimeout(to);
         if(!r.ok) throw new Error('http '+r.status);
         return f.json? r.json().then(function(j){ return j&&j.contents? String(j.contents):''; }) : r.text();
       }).then(function(txt){
-        if(!txt||txt.length<120) return prev;
+        if(!txt||txt.length<120) return;
         anyOk=true;
         var foundItems=extractMedia(txt,pageUrl);
-        return foundItems.length? foundItems : prev;
-      }).catch(function(){ return prev; });
+        if(foundItems.length>best.length) best=foundItems;
+      }).catch(function(){});
     });
   });
-  return chain.then(function(foundItems){ return {items:foundItems, ok:anyOk}; });
+  return chain.then(function(){ return {items:best, ok:anyOk}; });
 }
 
 var items=[], filter='all';
