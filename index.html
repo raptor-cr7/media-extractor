@@ -134,7 +134,7 @@ function copyText(txt,msg){
   function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ toast('Copy failed — long-press the link instead.'); } ta.remove(); }
 }
 
-var IMG_EXT=/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i, VID_EXT=/\.(mp4|webm|mov|m4v|m3u8|mkv|avi)$/i, AUD_EXT=/\.(mp3|ogg|wav|m4a|flac|aac)$/i;
+var IMG_EXT=/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i, VID_EXT=/\.(mp4|webm|mov|m4v|m3u8|mkv|avi|ogv)$/i, AUD_EXT=/\.(mp3|ogg|wav|m4a|flac|aac|oga)$/i;
 function classify(u){
   var path=String(u).split(/[?#]/)[0];
   if(VID_EXT.test(path)) return 'video';
@@ -193,20 +193,30 @@ function extractMedia(html,pageUrl){
     var st=el.getAttribute('style')||'', m, re=/url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
     while((m=re.exec(st))){ add(m[1],'image'); }
   });
+  /* raw scan: catches media URLs inside scripts, JSON and text/markdown versions of the page */
+  var raw=String(html).replace(/\\\//g,'/'), m2, re2=/https?:\/\/[^\s"'()<>]+/g;
+  while((m2=re2.exec(raw))){
+    var cand=m2[0].replace(/&amp;/g,'&').replace(/[.,;]+$/,'');
+    var t=classify(cand);
+    if(t) add(cand,t);
+  }
   return found;
 }
 
 var FETCHERS=[
   { build:function(u){ return u; }, json:false },
   { build:function(u){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u); }, json:false },
+  { build:function(u){ return 'https://r.jina.ai/'+u; }, json:false },
   { build:function(u){ return 'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u); }, json:false },
-  { build:function(u){ return 'https://corsproxy.io/?url='+encodeURIComponent(u); }, json:false },
+  { build:function(u){ return 'https://api.cors.lol/?url='+encodeURIComponent(u); }, json:false },
   { build:function(u){ return 'https://api.allorigins.win/get?url='+encodeURIComponent(u); }, json:true }
 ];
-function fetchPage(pageUrl){
-  var chain=Promise.reject(new Error('start'));
+function fetchItems(pageUrl){
+  var anyOk=false;
+  var chain=Promise.resolve([]);
   FETCHERS.forEach(function(f){
-    chain=chain.catch(function(){
+    chain=chain.then(function(prev){
+      if(prev.length) return prev;
       var ctrl=('AbortController' in window)?new AbortController():null;
       var to=ctrl?setTimeout(function(){ ctrl.abort(); },20000):null;
       return fetch(f.build(pageUrl), ctrl?{signal:ctrl.signal}:{ }).then(function(r){
@@ -214,12 +224,14 @@ function fetchPage(pageUrl){
         if(!r.ok) throw new Error('http '+r.status);
         return f.json? r.json().then(function(j){ return j&&j.contents? String(j.contents):''; }) : r.text();
       }).then(function(txt){
-        if(!txt||txt.length<120) throw new Error('empty');
-        return txt;
-      });
+        if(!txt||txt.length<120) return prev;
+        anyOk=true;
+        var foundItems=extractMedia(txt,pageUrl);
+        return foundItems.length? foundItems : prev;
+      }).catch(function(){ return prev; });
     });
   });
-  return chain;
+  return chain.then(function(foundItems){ return {items:foundItems, ok:anyOk}; });
 }
 
 var items=[], filter='all';
@@ -290,10 +302,12 @@ function extract(){
   var direct=classify(url);
   if(direct){ items=[{url:url,type:direct}]; bar.classList.add('show'); filter='all'; render(); toast('That link is itself a '+direct+' file.'); return; }
   goBtn.disabled=true; goBtn.textContent='Extracting…';
-  fetchPage(url).then(function(html){
-    items=extractMedia(html,url);
+  fetchItems(url).then(function(res){
+    items=res.items;
     bar.classList.add('show'); filter='all'; render();
-    toast(items.length? 'Found '+items.length+' media links.' : 'No media found on that page.');
+    if(items.length) toast('Found '+items.length+' media links.');
+    else if(res.ok) toast('No media found on that page.');
+    else toast('Could not read that page — it may block extractors or need a login.');
   }).catch(function(){
     toast('Could not read that page — it may block extractors or need a login.');
   }).then(function(){ goBtn.disabled=false; goBtn.textContent='Extract media'; });
