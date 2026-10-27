@@ -154,6 +154,7 @@ function extractMedia(html,pageUrl){
   var found=[], seen={};
   function add(raw,hint){
     var u=resolve(raw,pageUrl); if(!u||seen[u]) return;
+    if(/\/wiki\/(File|Image):/i.test(u)) return; /* wiki file-description pages are webpages, not media files */
     var type=hint||classify(u); if(!type) return;
     seen[u]=1; found.push({url:u,type:type});
   }
