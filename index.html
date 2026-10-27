@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAPTOR Media Extractor — Extract Images & Videos from Any Website</title>
+<meta name="description" content="Paste any website link and extract all available media links — images, videos and audio — in one click.">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<style>
+  :root{
+    --bg:#060607; --ink:#f4f4f6; --mut:#9a9aa5; --line:rgba(255,255,255,.09);
+    --glass:rgba(255,255,255,.045); --accent:#22d3ee; --accent2:#818cf8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:ui-rounded,"SF Pro Rounded",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    background:
+      radial-gradient(900px 480px at 85% -8%, rgba(34,211,238,.16), transparent 60%),
+      radial-gradient(760px 420px at -10% 22%, rgba(129,140,248,.13), transparent 60%),
+      var(--bg);
+    color:var(--ink);min-height:100vh;
+  }
+  .wrap{max-width:1060px;margin:0 auto;padding:26px 16px 60px}
+  .glass{background:var(--glass);border:1px solid var(--line);border-radius:20px;backdrop-filter:blur(16px) saturate(150%);-webkit-backdrop-filter:blur(16px) saturate(150%)}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:26px}
+  .logo{width:44px;height:44px;border-radius:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}
+  .brand{font-weight:900;letter-spacing:.14em;font-size:13px;color:var(--mut)}
+  .brand b{color:var(--ink)}
+  h1{font-size:clamp(30px,5.4vw,46px);font-weight:900;line-height:1.06;letter-spacing:-.01em}
+  h1 .grad{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--mut);font-size:15.5px;line-height:1.55;margin-top:10px;max-width:640px}
+  .extractor{margin-top:22px;padding:18px}
+  .inrow{display:flex;gap:10px;flex-wrap:wrap}
+  .inrow input{
+    flex:1;min-width:230px;background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:13px;
+    color:var(--ink);padding:14px 15px;font-size:15px;outline:none;
+  }
+  .inrow input:focus{border-color:rgba(34,211,238,.55)}
+  .btn{
+    appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.05);color:var(--ink);
+    padding:13px 20px;border-radius:13px;font-size:14.5px;font-weight:800;cursor:pointer;white-space:nowrap;
+  }
+  .btn:hover{background:rgba(255,255,255,.1)}
+  .btn:disabled{opacity:.55;cursor:wait}
+  .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;color:#04121a}
+  .samples{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px;align-items:center}
+  .samples span{font-size:12.5px;color:var(--mut)}
+  .chip{font-size:12.5px;padding:6px 12px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;user-select:none}
+  .chip:hover{color:var(--ink)}
+  .bar{display:none;align-items:center;gap:10px;flex-wrap:wrap;margin-top:20px}
+  .bar.show{display:flex}
+  .stats{font-size:14px;color:var(--mut);margin-right:auto}
+  .stats b{color:var(--ink)}
+  .pill{font-size:13px;padding:8px 15px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--mut);cursor:pointer;font-weight:700}
+  .pill.on{background:var(--accent);border-color:var(--accent);color:#04121a}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:16px}
+  .card{overflow:hidden;border-radius:16px;display:flex;flex-direction:column}
+  .thumb{position:relative;background:#000;aspect-ratio:16/10;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb video,.thumb audio{width:100%}
+  .thumb video{height:100%;object-fit:contain;background:#000}
+  .badge{position:absolute;top:8px;left:8px;font-size:10.5px;font-weight:900;letter-spacing:.06em;padding:4px 8px;border-radius:7px;background:rgba(0,0,0,.65);color:#fff;text-transform:uppercase}
+  .badge.img{background:rgba(34,211,238,.85);color:#04121a}
+  .badge.vid{background:rgba(129,140,248,.9);color:#0a0a18}
+  .badge.aud{background:rgba(52,211,153,.85);color:#04150d}
+  .card.broken .thumb img{opacity:.35}
+  .card.broken .badge{background:rgba(220,60,60,.85)}
+  .card .foot{padding:11px 12px;display:flex;flex-direction:column;gap:9px}
+  .url{font-size:11.5px;color:var(--mut);word-break:break-all;line-height:1.45;max-height:34px;overflow:hidden}
+  .acts{display:flex;gap:8px}
+  .acts .btn{padding:8px 13px;font-size:12.5px;border-radius:10px;flex:1}
+  .empty{display:none;text-align:center;color:var(--mut);padding:44px 18px;font-size:14.5px;line-height:1.6;margin-top:16px}
+  .empty.show{display:block}
+  .note{margin-top:26px;color:var(--mut);font-size:12.5px;line-height:1.6;text-align:center}
+  #toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;pointer-events:none;
+    background:rgba(18,18,22,.92);border:1px solid var(--line);color:var(--ink);padding:11px 18px;border-radius:12px;
+    font-size:13.5px;font-weight:600;transition:.25s;z-index:50;max-width:88vw;text-align:center;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🧲</div>
+    <div class="brand"><b>RAPTOR</b> · MEDIA EXTRACTOR</div>
+  </header>
+
+  <h1>Extract every <span class="grad">image &amp; video</span><br>from any website.</h1>
+  <p class="sub">Paste a website link below and this tool pulls out all the media on that page — images, videos and audio — as a gallery of direct links you can preview, copy or open.</p>
+
+  <div class="glass extractor">
+    <div class="inrow">
+      <input id="pageUrl" type="url" placeholder="Paste a website link — e.g. https://example.com/page" autocomplete="off" spellcheck="false">
+      <button class="btn primary" id="goBtn">Extract media</button>
+    </div>
+    <div class="samples">
+      <span>Try:</span>
+      <button class="chip sample" data-u="https://en.wikipedia.org/wiki/Cat">Wikipedia — Cat</button>
+      <button class="chip sample" data-u="https://commons.wikimedia.org/wiki/Main_Page">Wikimedia Commons</button>
+      <button class="chip sample" data-u="https://www.w3schools.com/html/html5_video.asp">W3Schools — Video page</button>
+    </div>
+  </div>
+
+  <div class="bar" id="bar">
+    <div class="stats" id="stats"></div>
+    <button class="pill on" data-f="all">All</button>
+    <button class="pill" data-f="image">Images</button>
+    <button class="pill" data-f="video">Videos</button>
+    <button class="pill" data-f="audio">Audio</button>
+    <button class="btn" id="copyAllBtn">Copy all links</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+  <div class="glass empty" id="empty">Nothing extracted yet.<br>Paste a link above and tap <b>Extract media</b>.</div>
+
+  <p class="note">Works on public web pages. Pages that need a login, or sites that block outside readers, may return little or nothing.<br>Everything runs in your browser — the pages you check are not stored anywhere.</p>
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+function $(s){ return document.querySelector(s); }
+function esc(s){ return String(s).replace(/[&<>"']/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+var toastTimer=null;
+function toast(msg){ var t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(function(){ t.classList.remove('show'); },3400); }
+function copyText(txt,msg){
+  function done(){ toast(msg||'Link copied.'); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(); }); }
+  else fallback();
+  function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); done(); }catch(e){ toast('Copy failed — long-press the link instead.'); } ta.remove(); }
+}
+
+var IMG_EXT=/\.(jpe?g|png|gif|webp|svg|avif|bmp|ico|tiff?)$/i, VID_EXT=/\.(mp4|webm|mov|m4v|m3u8|mkv|avi)$/i, AUD_EXT=/\.(mp3|ogg|wav|m4a|flac|aac)$/i;
+function classify(u){
+  var path=String(u).split(/[?#]/)[0];
+  if(VID_EXT.test(path)) return 'video';
+  if(AUD_EXT.test(path)) return 'audio';
+  if(IMG_EXT.test(path)) return 'image';
+  return null;
+}
+function resolve(raw,base){
+  if(!raw) return null;
+  raw=String(raw).trim();
+  if(!raw||raw.charAt(0)==='#'||/^(data|blob|javascript|mailto|tel):/i.test(raw)) return null;
+  try{ var u=new URL(raw,base); if(u.protocol!=='http:'&&u.protocol!=='https:') return null; return u.href; }catch(e){ return null; }
+}
+
+function extractMedia(html,pageUrl){
+  var doc=new DOMParser().parseFromString(html,'text/html');
+  var found=[], seen={};
+  function add(raw,hint){
+    var u=resolve(raw,pageUrl); if(!u||seen[u]) return;
+    var type=hint||classify(u); if(!type) return;
+    seen[u]=1; found.push({url:u,type:type});
+  }
+  /* page share media */
+  ['meta[property="og:image"]','meta[property="og:image:url"]','meta[name="twitter:image"]','meta[name="twitter:image:src"]'].forEach(function(sel){
+    var el=doc.querySelector(sel); if(el) add(el.getAttribute('content'),'image');
+  });
+  ['meta[property="og:video"]','meta[property="og:video:url"]','meta[property="og:video:secure_url"]','meta[name="twitter:player:stream"]'].forEach(function(sel){
+    var el=doc.querySelector(sel); if(el) add(el.getAttribute('content'),'video');
+  });
+  /* images */
+  Array.prototype.forEach.call(doc.querySelectorAll('img'),function(img){
+    add(img.getAttribute('src'),'image');
+    add(img.getAttribute('data-src'),'image');
+    add(img.getAttribute('data-lazy-src'),'image');
+    add(img.getAttribute('data-original'),'image');
+    var ss=img.getAttribute('srcset')||img.getAttribute('data-srcset');
+    if(ss){ var parts=ss.split(',').map(function(p){ return p.trim().split(/\s+/)[0]; }).filter(Boolean); if(parts.length) add(parts[parts.length-1],'image'); }
+  });
+  Array.prototype.forEach.call(doc.querySelectorAll('source[srcset]'),function(s){
+    var parts=(s.getAttribute('srcset')||'').split(',').map(function(p){ return p.trim().split(/\s+/)[0]; }).filter(Boolean);
+    if(parts.length) add(parts[parts.length-1],'image');
+  });
+  /* videos + posters */
+  Array.prototype.forEach.call(doc.querySelectorAll('video'),function(v){
+    add(v.getAttribute('src'),'video');
+    add(v.getAttribute('poster'),'image');
+  });
+  Array.prototype.forEach.call(doc.querySelectorAll('video source, audio source, source[src]'),function(s){
+    add(s.getAttribute('src'),null);
+  });
+  Array.prototype.forEach.call(doc.querySelectorAll('audio'),function(a){ add(a.getAttribute('src'),'audio'); });
+  /* direct media links */
+  Array.prototype.forEach.call(doc.querySelectorAll('a[href]'),function(a){ add(a.getAttribute('href'),null); });
+  /* css background images */
+  Array.prototype.forEach.call(doc.querySelectorAll('[style]'),function(el){
+    var st=el.getAttribute('style')||'', m, re=/url\(\s*['"]?([^'")]+)['"]?\s*\)/g;
+    while((m=re.exec(st))){ add(m[1],'image'); }
+  });
+  return found;
+}
+
+var FETCHERS=[
+  { build:function(u){ return u; }, json:false },
+  { build:function(u){ return 'https://api.allorigins.win/raw?url='+encodeURIComponent(u); }, json:false },
+  { build:function(u){ return 'https://api.codetabs.com/v1/proxy?quest='+encodeURIComponent(u); }, json:false },
+  { build:function(u){ return 'https://corsproxy.io/?url='+encodeURIComponent(u); }, json:false },
+  { build:function(u){ return 'https://api.allorigins.win/get?url='+encodeURIComponent(u); }, json:true }
+];
+function fetchPage(pageUrl){
+  var chain=Promise.reject(new Error('start'));
+  FETCHERS.forEach(function(f){
+    chain=chain.catch(function(){
+      var ctrl=('AbortController' in window)?new AbortController():null;
+      var to=ctrl?setTimeout(function(){ ctrl.abort(); },20000):null;
+      return fetch(f.build(pageUrl), ctrl?{signal:ctrl.signal}:{ }).then(function(r){
+        if(to) clearTimeout(to);
+        if(!r.ok) throw new Error('http '+r.status);
+        return f.json? r.json().then(function(j){ return j&&j.contents? String(j.contents):''; }) : r.text();
+      }).then(function(txt){
+        if(!txt||txt.length<120) throw new Error('empty');
+        return txt;
+      });
+    });
+  });
+  return chain;
+}
+
+var items=[], filter='all';
+var grid=$('#grid'), bar=$('#bar'), statsEl=$('#stats'), emptyEl=$('#empty');
+emptyEl.classList.add('show');
+
+function counts(){
+  var c={image:0,video:0,audio:0};
+  items.forEach(function(it){ c[it.type]++; });
+  return c;
+}
+function render(){
+  var c=counts();
+  var host=''; try{ host=new URL(currentPage).hostname; }catch(e){}
+  statsEl.innerHTML='Found <b>'+items.length+'</b> media on <b>'+esc(host)+'</b> — '+c.image+' images · '+c.video+' videos · '+c.audio+' audio';
+  document.querySelectorAll('.pill').forEach(function(p){
+    var f=p.getAttribute('data-f');
+    p.classList.toggle('on', f===filter);
+    var n = f==='all'? items.length : c[f];
+    p.textContent=(f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1))+' ('+n+')';
+  });
+  var show=items.filter(function(it){ return filter==='all'||it.type===filter; });
+  grid.innerHTML=show.map(function(it,i){
+    var media='';
+    if(it.type==='image') media='<img loading="lazy" decoding="async" src="'+esc(it.url)+'" alt="" onerror="this.closest(\'.card\').classList.add(\'broken\')">';
+    else if(it.type==='video') media='<video controls preload="metadata" src="'+esc(it.url)+'" data-hls="'+(/\.m3u8($|\?)/i.test(it.url)?'1':'')+'"></video>';
+    else media='<audio controls preload="metadata" src="'+esc(it.url)+'"></audio>';
+    var badge = it.type==='image'?'Image':(it.type==='video'?'Video':'Audio');
+    var cls = it.type==='image'?'img':(it.type==='video'?'vid':'aud');
+    return '<div class="card glass"><div class="thumb">'+media+'<span class="badge '+cls+'">'+badge+'</span></div>'
+      +'<div class="foot"><div class="url">'+esc(it.url)+'</div>'
+      +'<div class="acts"><button class="btn" data-copy="'+esc(it.url)+'">Copy link</button>'
+      +'<a class="btn" style="text-align:center;text-decoration:none" href="'+esc(it.url)+'" target="_blank" rel="noopener">Open</a></div></div></div>';
+  }).join('');
+  /* attach hls to any .m3u8 previews */
+  if(window.Hls && Hls.isSupported()){
+    Array.prototype.forEach.call(grid.querySelectorAll('video[data-hls="1"]'),function(v){
+      try{ var h=new Hls(); h.loadSource(v.getAttribute('src')); h.attachMedia(v); }catch(e){}
+    });
+  }
+  emptyEl.classList.toggle('show', !show.length);
+  emptyEl.innerHTML = items.length? 'Nothing in this filter.' : 'No media found on that page.<br>It may be built with scripts that load media later, or the site may block outside readers.';
+}
+grid.addEventListener('click',function(e){
+  var b=e.target.closest? e.target.closest('[data-copy]') : null;
+  if(b) copyText(b.getAttribute('data-copy'));
+});
+document.querySelectorAll('.pill').forEach(function(p){
+  p.addEventListener('click',function(){ filter=p.getAttribute('data-f'); render(); });
+});
+$('#copyAllBtn').addEventListener('click',function(){
+  if(!items.length) return;
+  copyText(items.map(function(it){ return it.url; }).join('\n'), items.length+' links copied.');
+});
+
+var currentPage='';
+function normalizeUrl(v){
+  v=String(v||'').trim();
+  if(!v) return '';
+  if(!/^https?:\/\//i.test(v)) v='https://'+v;
+  return v;
+}
+var goBtn=$('#goBtn');
+function extract(){
+  var url=normalizeUrl($('#pageUrl').value);
+  if(!url){ toast('Paste a website link first.'); return; }
+  currentPage=url;
+  var direct=classify(url);
+  if(direct){ items=[{url:url,type:direct}]; bar.classList.add('show'); filter='all'; render(); toast('That link is itself a '+direct+' file.'); return; }
+  goBtn.disabled=true; goBtn.textContent='Extracting…';
+  fetchPage(url).then(function(html){
+    items=extractMedia(html,url);
+    bar.classList.add('show'); filter='all'; render();
+    toast(items.length? 'Found '+items.length+' media links.' : 'No media found on that page.');
+  }).catch(function(){
+    toast('Could not read that page — it may block extractors or need a login.');
+  }).then(function(){ goBtn.disabled=false; goBtn.textContent='Extract media'; });
+}
+goBtn.addEventListener('click',extract);
+$('#pageUrl').addEventListener('keydown',function(e){ if(e.key==='Enter') extract(); });
+document.querySelectorAll('.sample').forEach(function(ch){
+  ch.addEventListener('click',function(){ $('#pageUrl').value=ch.getAttribute('data-u'); extract(); });
+});
+})();
+</script>
+</body>
+</html>
